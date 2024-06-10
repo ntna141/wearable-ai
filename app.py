@@ -15,50 +15,44 @@ import cv2
 import numpy as np
 
 def is_text_on_paper(image_data):
+    # Convert the image data to a NumPy array
     nparr = np.frombuffer(image_data, np.uint8)
     
-    image = cv2.imdecode(nparr, cv2.IMREAD_GRAYSCALE)
+    # Decode the image data
+    image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
-    _, binary = cv2.threshold(image, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    # Convert to grayscale and apply thresholding
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
 
-    num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(binary, connectivity=8)
+    # Apply morphological operations to remove noise and connect text regions
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+    opening = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel, iterations=1)
+    closing = cv2.morphologyEx(opening, cv2.MORPH_CLOSE, kernel, iterations=1)
 
-    # Create a copy of the original image for drawing
-    image_with_boxes = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+    # Find contours and filter based on aspect ratio and area
+    contours, _ = cv2.findContours(closing, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    text_contours = []
+    for contour in contours:
+        x, y, w, h = cv2.boundingRect(contour)
+        aspect_ratio = w / float(h)
+        area = cv2.contourArea(contour)
+        if 0.5 <= aspect_ratio <= 10 and 100 <= area <= 1000:
+            text_contours.append(contour)
 
-    min_aspect_ratio = 0.2
-    max_aspect_ratio = 8.0
-    min_area = 20
-    max_area = 1000  # Adjust this value based on the maximum expected size of individual text components
-    text_component_count = 0
-    total_component_count = 0
+    # Determine if the image contains a significant amount of text based on the number of text contours
+    text_contour_threshold = 15  # Adjust this value based on your requirements
+    contains_significant_text = len(text_contours) >= text_contour_threshold
 
-    for i in range(1, num_labels):
-        width = stats[i, cv2.CC_STAT_WIDTH]
-        height = stats[i, cv2.CC_STAT_HEIGHT]
-        area = stats[i, cv2.CC_STAT_AREA]
-        x = stats[i, cv2.CC_STAT_LEFT]
-        y = stats[i, cv2.CC_STAT_TOP]
+    # Draw bounding boxes around the text contours (optional)
+    for contour in text_contours:
+        x, y, w, h = cv2.boundingRect(contour)
+        cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
 
-        total_component_count += 1
+    # Save the processed image for analysis (optional)
+    cv2.imwrite("processed_image.jpg", image)
 
-        if min_area <= area <= max_area:
-            aspect_ratio = width / float(height)
-            if min_aspect_ratio <= aspect_ratio <= max_aspect_ratio:
-                cv2.rectangle(image_with_boxes, (x, y), (x + width, y + height), (0, 255, 0), 1)
-                text_component_count += 1
-        # else:
-            cv2.rectangle(image_with_boxes, (x, y), (x + width, y + height), (255, 0, 0), 1)
-
-    text_component_percentage = (text_component_count / float(total_component_count)) * 100
-
-    min_text_percentage = 50 
-    contains_text = text_component_percentage >= min_text_percentage
-
-    output_filename = "text_analysis_result.jpg"
-    cv2.imwrite(output_filename, image_with_boxes)
-
-    return contains_text
+    return contains_significant_text
 
 @app.route('/transcribe', methods=['POST'])
 def transcribe():
