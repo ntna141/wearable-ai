@@ -24,7 +24,7 @@ def is_text_on_paper(image_data):
     num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(binary, connectivity=8)
 
     # Create a copy of the original image for drawing
-    # image_with_boxes = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+    image_with_boxes = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
 
     min_aspect_ratio = 0.2
     max_aspect_ratio = 8.0
@@ -45,18 +45,18 @@ def is_text_on_paper(image_data):
         if min_area <= area <= max_area:
             aspect_ratio = width / float(height)
             if min_aspect_ratio <= aspect_ratio <= max_aspect_ratio:
-                # cv2.rectangle(image_with_boxes, (x, y), (x + width, y + height), (0, 255, 0), 1)
+                cv2.rectangle(image_with_boxes, (x, y), (x + width, y + height), (0, 255, 0), 1)
                 text_component_count += 1
         # else:
-        #     cv2.rectangle(image_with_boxes, (x, y), (x + width, y + height), (255, 0, 0), 1)
+            cv2.rectangle(image_with_boxes, (x, y), (x + width, y + height), (255, 0, 0), 1)
 
     text_component_percentage = (text_component_count / float(total_component_count)) * 100
 
-    min_text_percentage = 60 
+    min_text_percentage = 50 
     contains_text = text_component_percentage >= min_text_percentage
 
-    # output_filename = "text_analysis_result.jpg"
-    # cv2.imwrite(output_filename, image_with_boxes)
+    output_filename = "text_analysis_result.jpg"
+    cv2.imwrite(output_filename, image_with_boxes)
 
     return contains_text
 
@@ -97,6 +97,7 @@ def transcribe():
         if transcript.lower() == "no" or transcript.lower() == "no.":
             return jsonify({'error': 'Image does not contain a single question with answers'}), 400
         if transcript.lower() == "graph" or transcript.lower() == "graph.":
+            print("graph")
             response_image = openai.chat.completions.create(
                 model=MODEL,
                 messages=[
