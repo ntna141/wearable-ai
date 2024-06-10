@@ -12,13 +12,64 @@ load_dotenv()
 openai.api_key = os.getenv('OPENAI_API_KEY')
 MODEL = 'gpt-4o'
 
-def is_image_suitable_for_ocr(image_path, sharpness_threshold=0):
+import numpy as np
+
+def calculate_color_percentages(image_path, color_ranges):
+    # Load the image
     image = cv2.imread(image_path)
+
+    # Calculate total pixels
+    total_pixels = image.shape[0] * image.shape[1]
+
+    # Initialize a dictionary to store color percentages
+    color_percentages = {}
+
+    # Iterate over each color range
+    for color_name, (lower, upper) in color_ranges.items():
+        # Create a mask for the current color range
+        mask = cv2.inRange(image, lower, upper)
+        
+        # Count the pixels within the color range
+        color_pixels = cv2.countNonZero(mask)
+        
+        # Calculate the percentage of pixels for the current color
+        color_percentage = (color_pixels / total_pixels) * 100
+        
+        # Store the percentage in the dictionary
+        color_percentages[color_name] = color_percentage
+
+    return color_percentages
+
+color_ranges = {
+    "Whitish": ((180, 180, 180), (255, 255, 255)),
+    "Blackish": ((0, 0, 0), (70, 70, 70)),
+    "Reddish": ((0, 0, 150), (100, 100, 255)),
+    "Greenish": ((0, 150, 0), (100, 255, 100)),
+    "Bluish": ((150, 0, 0), (255, 100, 100))
+}
+
+def is_image_suitable_for_ocr(image_path, sharpness_threshold=0, white_lower=(180, 180, 180), white_upper=(255, 255, 255), black_lower=(0, 0, 0), black_upper=(70, 70, 70)):
+    image = cv2.imread(image_path)
+    percentages = calculate_color_percentages(image_path, color_ranges)
+    print(percentages)
     sharpness = cv2.Laplacian(image, cv2.CV_64F).var()
-    print("sharpness", sharpness)
+    print("Sharpness:", sharpness)
     if sharpness < sharpness_threshold:
         return False
-    return True
+
+    whitish_mask = cv2.inRange(image, white_lower, white_upper)
+    whitish_pixels = cv2.countNonZero(whitish_mask)
+    total_pixels = image.shape[0] * image.shape[1]
+    whitish_percentage = whitish_pixels / total_pixels
+
+    blackish_mask = cv2.inRange(image, black_lower, black_upper)
+    blackish_pixels = cv2.countNonZero(blackish_mask)
+    blackish_percentage = blackish_pixels / total_pixels
+    print(whitish_percentage, blackish_percentage)
+    if whitish_percentage > 0.7 and blackish_percentage > 0.01:
+        return True
+    else:
+        return False
 
 @app.route('/answer', methods=['POST'])
 def answer():
