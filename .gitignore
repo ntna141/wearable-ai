@@ -1,0 +1,10 @@
+# Ignore environment files
+.env
+
+# Ignore image files
+*.jpg
+*.png
+*.gif
+*.svg
+*.bmp
+*.webp
