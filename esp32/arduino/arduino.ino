@@ -28,11 +28,11 @@
 #define FLASH_GPIO_NUM 4
 
 // Button pin
-#define BUTTON_PIN 0
+#define BUTTON_PIN 14
 
 // WiFi credentials
-const char* ssid = "Abc";
-const char* password = "11111111";
+const char* ssid = "your_SSID";
+const char* password = "your_PASSWORD";
 
 // API endpoint URL
 const char* apiUrl = "http://18.220.104.120/transcribe";
@@ -91,8 +91,6 @@ void capturePhotoUploadAPI() {
   }
 
   HTTPClient http;
-
-  // Begin the HTTP POST request
   http.begin(apiUrl);
 
   // Create a unique boundary string
@@ -101,31 +99,39 @@ void capturePhotoUploadAPI() {
   // Set the content type header with the boundary
   http.addHeader("Content-Type", "multipart/form-data; boundary=" + boundary);
 
-  // Start the multipart/form-data
-  String body = "--" + boundary + "\r\n";
-  body += "Content-Disposition: form-data; name=\"image\"; filename=\"image.jpg\"\r\n";
-  body += "Content-Type: image/jpeg\r\n\r\n";
+  // Start the multipart/form-data body
+  String bodyStart = "--" + boundary + "\r\n";
+  bodyStart += "Content-Disposition: form-data; name=\"image\"; filename=\"image.jpg\"\r\n";
+  bodyStart += "Content-Type: image/jpeg\r\n\r\n";
+
+  // End the multipart/form-data body
+  String bodyEnd = "\r\n--" + boundary + "--\r\n";
 
   // Calculate content length
-  int contentLength = body.length() + fb->len + 6 + boundary.length() + 4;
-
-  // Add the image data to the request body
+  int contentLength = bodyStart.length() + fb->len + bodyEnd.length();
   http.addHeader("Content-Length", String(contentLength));
-  int httpCode = http.POST((uint8_t*)body.c_str(), body.length());
+
+  // Start the POST request
+  int httpCode = http.POST((uint8_t*)bodyStart.c_str(), bodyStart.length());
 
   if (httpCode > 0) {
-    // Write the image data to the request body
-    http.write(fb->buf, fb->len);
-
-    // End the multipart/form-data
-    String endBoundary = "\r\n--" + boundary + "--\r\n";
-    http.write((uint8_t*)endBoundary.c_str(), endBoundary.length());
+    // Send the image data
+    WiFiClient *stream = http.getStreamPtr();
+    stream->write(fb->buf, fb->len);
+    
+    // Send the end boundary
+    stream->write((uint8_t*)bodyEnd.c_str(), bodyEnd.length());
 
     // Get the response code
-    int httpResponseCode = http.POST((uint8_t*)endBoundary.c_str(), endBoundary.length());
+    int httpResponseCode = http.POST((uint8_t*)bodyEnd.c_str(), bodyEnd.length());
 
     if (httpResponseCode == 200) {
       Serial.println("Photo uploaded successfully");
+
+      // Get the response body
+      String responseBody = http.getString();
+      Serial.println("Response from server:");
+      Serial.println(responseBody);
     } else {
       Serial.print("Photo upload failed with error code: ");
       Serial.println(httpResponseCode);
